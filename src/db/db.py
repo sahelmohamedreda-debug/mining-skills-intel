@@ -31,42 +31,32 @@ def init_db() -> None:
 
 
 def insert_job(job: dict) -> bool:
-    """
-    Insère une offre dans la base de données.
-    Retourne True si l'offre a bien été insérée (nouvelle offre),
-    False si elle existait déjà (doublon détecté et ignoré).
-    """
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute(
-            """
-            INSERT INTO jobs (external_id, company, title, location, description, url, source, date_scraped)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            """,
-            (
-                job["external_id"],
-                job["company"],
-                job["title"],
-                job["location"],
-                job["description"],
-                job["url"],
-                job["source"],
-            ),
+            """INSERT INTO jobs (external_id, company, title, location,
+               description, url, source, date_scraped, last_seen_date, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), 'open')""",
+            (job["external_id"], job["company"], job["title"],
+             job["location"], job["description"], job["url"], job["source"]),
         )
         conn.commit()
         return True
 
     except sqlite3.IntegrityError:
-        # Cette erreur se déclenche automatiquement si on essaie d'insérer
-        # une ligne qui viole la contrainte UNIQUE(company, external_id)
-        # -> ça veut dire que cette offre est déjà en base, on l'ignore simplement
+        # L'offre existe déjà : on la marque comme "toujours vue" aujourd'hui
+        cursor.execute(
+            """UPDATE jobs SET last_seen_date = datetime('now'), status = 'open'
+               WHERE company = ? AND external_id = ?""",
+            (job["company"], job["external_id"]),
+        )
+        conn.commit()
         return False
 
     finally:
         conn.close()
-
 
 def count_jobs() -> int:
     """Retourne le nombre total d'offres actuellement en base."""

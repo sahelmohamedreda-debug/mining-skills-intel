@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
 PROMPT_TEMPLATE = """Extract skills from this job posting at a MINING/MINERALS company. Return ONLY valid JSON.
 
 Job Title: {title}
@@ -43,11 +42,11 @@ def extract_skills_from_description(job_title: str, job_description: str) -> dic
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=800,  # Augmenté un peu aussi pour plus de compétences possibles
-        )
+    model="llama-3.3-70b-versatile",  # Au lieu de meta-llama/Llama-3.3-70B-Instruct
+    messages=[{"role": "user", "content": prompt}],
+    temperature=0.1,
+    max_tokens=800,
+)
         
         response_text = response.choices[0].message.content.strip()
         
