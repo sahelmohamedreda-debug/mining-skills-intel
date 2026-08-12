@@ -3,7 +3,7 @@ name: Daily Mining Skills Pipeline
 on:
   schedule:
     # Tous les jours à 6h00 UTC (7h/8h heure du Maroc selon saison)
-    - cron: '0 6 * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch:  # Permet de le lancer manuellement depuis GitHub
 
 jobs:
