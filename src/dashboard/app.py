@@ -8,7 +8,7 @@ import plotly.express as px
 from datetime import datetime
 import os
 from dotenv import load_dotenv
-from groq import Groq
+from openai import OpenAI
 
 # ============================================================
 # CONFIGURATION DE LA PAGE
@@ -20,14 +20,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-DB_PATH = Path(__file__).parent.parent / "data" / "jobs.db"
-ENV_PATH = Path(__file__).parent.parent / ".env"
+# Fichier situé dans src/dashboard/ -> 3 .parent pour remonter à la racine
+DB_PATH = Path(__file__).parent.parent.parent / "data" / "jobs.db"
+ENV_PATH = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(ENV_PATH)
 
-# Initialisation Groq
-groq_client = None
-if os.getenv("GROQ_API_KEY"):
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Initialisation OpenRouter
+openrouter_client = None
+if os.getenv("OPENROUTER_API_KEY"):
+    openrouter_client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+    )
 
 # ============================================================
 # STYLE PERSONNALISÉ MODERNE
@@ -37,7 +41,6 @@ st.markdown("""
     .stApp {
         background-color: #f5f7fb;
     }
-    
     .main-header {
         font-size: 2.5rem;
         font-weight: 800;
@@ -47,14 +50,12 @@ st.markdown("""
         margin-bottom: 0.2rem;
         letter-spacing: -0.5px;
     }
-    
     .sub-header {
         font-size: 1.1rem;
         color: #5A7188;
         margin-bottom: 1.5rem;
         font-weight: 400;
     }
-    
     .metric-card {
         background: white;
         padding: 1.2rem 1.5rem;
@@ -65,24 +66,20 @@ st.markdown("""
         flex: 1;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
     .metric-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 25px rgba(26, 58, 92, 0.12);
     }
-    
     .metric-card .value {
         font-size: 2.2rem;
         font-weight: 700;
         color: #1A3A5C;
     }
-    
     .metric-card .label {
         font-size: 0.85rem;
         color: #7A8FA0;
         font-weight: 500;
     }
-    
     .metric-card .delta {
         font-size: 0.8rem;
         color: #2C6E49;
@@ -92,24 +89,20 @@ st.markdown("""
         display: inline-block;
         margin-top: 0.3rem;
     }
-    
     .stExpander {
         border: 1px solid rgba(26, 58, 92, 0.1) !important;
         border-radius: 12px !important;
         background: white;
     }
-    
     .stButton > button {
         border-radius: 10px !important;
         font-weight: 600 !important;
         transition: all 0.2s ease !important;
     }
-    
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #1A3A5C, #2C5F8A) !important;
         color: white !important;
     }
-    
     .chat-message-ai {
         background: linear-gradient(135deg, #f0f4f8, #e8edf3);
         padding: 1.2rem;
@@ -119,7 +112,6 @@ st.markdown("""
         font-size: 0.95rem;
         line-height: 1.6;
     }
-    
     .footer {
         text-align: center;
         padding: 1.5rem;
@@ -128,7 +120,6 @@ st.markdown("""
         border-top: 1px solid rgba(26, 58, 92, 0.06);
         margin-top: 2rem;
     }
-    
     hr {
         border: none;
         height: 2px;
@@ -141,7 +132,7 @@ st.markdown("""
 # ============================================================
 # CONNEXION À LA BASE
 # ============================================================
-@st.cache_data(ttl=3600)  # Rafraîchit toutes les heures
+@st.cache_data(ttl=3600)
 def load_data():
     conn = sqlite3.connect(DB_PATH)
 
@@ -170,12 +161,12 @@ if jobs_df.empty:
     st.stop()
 
 # ============================================================
-# FONCTION IA GROQ
+# FONCTION IA — OPENROUTER
 # ============================================================
-def query_groq(question: str, skills_data: pd.DataFrame, jobs_data: pd.DataFrame) -> str:
-    if groq_client is None:
-        return "⚠️ Clé API Groq non configurée."
-    
+def query_ai(question: str, skills_data: pd.DataFrame, jobs_data: pd.DataFrame) -> str:
+    if openrouter_client is None:
+        return "⚠️ Clé API OpenRouter non configurée."
+
     if len(skills_data) == 0:
         return "Aucune donnée disponible avec les filtres actuels."
 
@@ -217,15 +208,21 @@ Réponds en français, 3-5 phrases, UNIQUEMENT sur ces données.
 Ne jamais utiliser "skills gap"."""
 
     try:
-        response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
+        response = openrouter_client.chat.completions.create(
+            model="meta-llama/llama-3.3-70b-instruct:free",
+            messages=[
+                {"role": "system", "content": "Tu es un analyste de données spécialisé dans le secteur minier."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.3,
             max_tokens=400,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"❌ Erreur: {e}"
+        error_str = str(e)
+        if "429" in error_str or "rate" in error_str.lower():
+            return "⚠️ Limite de requêtes atteinte temporairement. Réessaie dans une minute."
+        return f"❌ Erreur: {error_str}"
 
 # ============================================================
 # EN-TÊTE
@@ -233,7 +230,6 @@ Ne jamais utiliser "skills gap"."""
 st.markdown('<p class="main-header">⛏️ Compétences demandées — Secteur Minier</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Analyse des compétences dans les offres d\'emploi collectées</p>', unsafe_allow_html=True)
 
-# ⚠️ AVERTISSEMENT VISIBLE (amélioration)
 st.warning("""
 ⚠️ **Important** : ces chiffres montrent ce que les employeurs **demandent** 
 dans leurs offres — pas les compétences que possèdent réellement les travailleurs. 
@@ -264,7 +260,6 @@ st.sidebar.markdown("""
 
 st.sidebar.markdown("---")
 
-# 🔄 Bouton de rafraîchissement (amélioration)
 if st.sidebar.button("🔄 Rafraîchir les données", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
@@ -280,7 +275,6 @@ selected_location = st.sidebar.selectbox("📍 Localisation", locations)
 categories = ["Toutes"] + sorted(skills_df["category"].unique().tolist())
 selected_category = st.sidebar.selectbox("📂 Catégorie", categories)
 
-# 🔒 Renommer "Compliance" en français (amélioration)
 compliance_options = ["Toutes", "Uniquement avec certification", "Uniquement générales"]
 selected_compliance = st.sidebar.selectbox("🔒 Type de compétence", compliance_options)
 
@@ -317,13 +311,12 @@ elif selected_compliance == "Uniquement générales":
 
 filtered_jobs = filtered_jobs[filtered_jobs['id'].isin(filtered_skills['job_id'].unique())]
 
-# ✅ Gestion des cas vides (amélioration)
 if len(filtered_jobs) == 0:
     st.warning("Aucune offre ne correspond à ces filtres. Essayez d'en retirer un.")
     st.stop()
 
 # ============================================================
-# INDICATEURS CLÉS AVEC TOOLTIPS (amélioration)
+# INDICATEURS CLÉS
 # ============================================================
 col1, col2, col3, col4 = st.columns(4)
 
@@ -370,7 +363,7 @@ col_left, col_right = st.columns([2, 1])
 
 with col_left:
     st.markdown("### 🏆 Top 15 compétences demandées")
-    
+
     top_skills = (
         filtered_skills.groupby("skill_name")
         .size()
@@ -378,7 +371,7 @@ with col_left:
         .sort_values("nb", ascending=False)
         .head(15)
     )
-    
+
     if len(top_skills) > 0:
         fig = px.bar(
             top_skills.sort_values("nb"),
@@ -402,28 +395,28 @@ with col_left:
 with col_right:
     st.markdown("### 🤖 Assistant IA")
     st.markdown('<p style="color: #7A8FA0; font-size: 0.85rem;">Posez une question sur les données</p>', unsafe_allow_html=True)
-    
+
     suggestions = [
         "Top 5 compétences techniques ?",
         "Quelle entreprise recrute le plus ?",
         "Compétences avec certification ?",
         "Comparer les entreprises ?"
     ]
-    
+
     for suggestion in suggestions:
         if st.button(suggestion, key=f"sugg_{suggestion[:10]}", use_container_width=True):
             st.session_state['question'] = suggestion
-    
+
     question = st.text_input(
         "Votre question",
         value=st.session_state.get('question', ''),
         placeholder="Ex: Quelles compétences sont les plus demandées ?"
     )
-    
+
     if st.button("🔍 Analyser", type="primary", use_container_width=True):
         if question:
             with st.spinner("Analyse en cours..."):
-                response = query_groq(question, filtered_skills, filtered_jobs)
+                response = query_ai(question, filtered_skills, filtered_jobs)
                 st.markdown(f"""
                     <div class="chat-message-ai">
                         <b>🤖 Réponse :</b><br>{response}
@@ -447,7 +440,7 @@ for i, cat in enumerate(categories_list):
         st.markdown(f"**{cat}**")
         cat_skills = filtered_skills[filtered_skills["category"] == cat]
         top_cat = cat_skills.groupby("skill_name").size().reset_index(name="nb").sort_values("nb", ascending=False).head(5)
-        
+
         if len(top_cat) > 0:
             for _, row in top_cat.iterrows():
                 st.markdown(f"- {row['skill_name']} **({row['nb']})**")
@@ -461,10 +454,7 @@ st.markdown("---")
 # ============================================================
 st.markdown("### 🏢 Matrice Entreprise vs Catégorie")
 
-matrix = pd.crosstab(
-    filtered_skills['company'],
-    filtered_skills['category']
-)
+matrix = pd.crosstab(filtered_skills['company'], filtered_skills['category'])
 
 if not matrix.empty:
     fig_heatmap = px.imshow(
@@ -480,33 +470,27 @@ if not matrix.empty:
         zmin=0,
         zmax=matrix.max().max() + 5
     )
-    
+
     fig_heatmap.update_layout(
         height=500,
         margin=dict(l=40, r=40, t=20, b=40),
         font=dict(size=14, color='#1A3A5C'),
         xaxis=dict(tickangle=30, tickfont=dict(size=13)),
         yaxis=dict(tickfont=dict(size=13)),
-        coloraxis_colorbar=dict(
-            title=dict(text='Occurrences', font=dict(size=12))
-        )
+        coloraxis_colorbar=dict(title=dict(text='Occurrences', font=dict(size=12)))
     )
-    
+
     fig_heatmap.update_traces(
         textfont=dict(size=16, color='black'),
-        hovertemplate=(
-            '<b>%{y}</b> / <b>%{x}</b><br>'
-            'Occurrences: <b>%{z}</b><br>'
-            '<extra></extra>'
-        ),
+        hovertemplate='<b>%{y}</b> / <b>%{x}</b><br>Occurrences: <b>%{z}</b><extra></extra>',
         texttemplate='%{z}'
     )
-    
+
     st.plotly_chart(fig_heatmap, use_container_width=True)
-    
+
     total_by_company = matrix.sum(axis=1).sort_values(ascending=False)
     top_cat = matrix.sum(axis=0).sort_values(ascending=False)
-    
+
     col1, col2 = st.columns(2)
     with col1:
         st.caption(f"🏢 **{total_by_company.index[0]}** : {total_by_company.iloc[0]} compétences")
@@ -524,19 +508,18 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### 📈 Évolution des offres")
-    
+
     if 'date_scraped' in filtered_jobs.columns and not filtered_jobs['date_scraped'].isna().all():
         filtered_jobs['date_scraped'] = pd.to_datetime(filtered_jobs['date_scraped'])
         daily_jobs = filtered_jobs.groupby(
             filtered_jobs['date_scraped'].dt.date
         ).size().reset_index(name='nb_offres')
-        
+
         if len(daily_jobs) > 1:
             fig_evo = px.line(
                 daily_jobs,
                 x='date_scraped',
                 y='nb_offres',
-                title="",
                 labels={'date_scraped': 'Date', 'nb_offres': 'Nb offres'},
                 markers=True,
                 color_discrete_sequence=['#1A3A5C']
@@ -555,15 +538,14 @@ with col1:
 
 with col2:
     st.markdown("### 📊 Répartition par catégorie")
-    
+
     category_counts = filtered_skills.groupby("category").size().reset_index(name="nb")
-    
+
     if len(category_counts) > 0:
         fig_pie = px.pie(
             category_counts,
             values="nb",
             names="category",
-            title="",
             color_discrete_sequence=px.colors.qualitative.Set2
         )
         fig_pie.update_layout(
