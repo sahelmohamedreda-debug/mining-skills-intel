@@ -21,7 +21,7 @@ st.set_page_config(
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "jobs.db"
 
 # ============================================================
-# STYLE — IDENTITÉ "CAROTTE DE FORAGE"
+# STYLE — VERSION SOMBRE (MINERAL)
 # ============================================================
 st.markdown("""
 <style>
@@ -181,14 +181,6 @@ div[data-testid="stAlertContainer"] {
 .stDataFrame {
     border: 1px solid #2A343C !important;
     border-radius: 4px !important;
-}
-
-.section-marker {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-    color: #5C8B7C;
-    letter-spacing: 1px;
-    margin-bottom: -0.3rem;
 }
 
 .footer {
@@ -352,7 +344,7 @@ def generate_report_html(jobs_data: pd.DataFrame, skills_data: pd.DataFrame) -> 
 # EN-TÊTE
 # ============================================================
 st.markdown("""
-<div class="header-eyebrow">Rapport de sondage — Marché de l'emploi</div>
+<div class="header-eyebrow">Tableau de bord — Analyse des compétences</div>
 <p class="main-header">Compétences demandées<br>secteur minier</p>
 """, unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Analyse des compétences dans les offres d\'emploi collectées</p>', unsafe_allow_html=True)
@@ -394,18 +386,23 @@ if st.sidebar.button("🔄 Rafraîchir les données", use_container_width=True):
 
 st.sidebar.markdown("### 🔍 Filtres")
 
+# FILTRE ENTREPRISE
 companies = ["Toutes"] + sorted(jobs_df["company"].unique().tolist())
 selected_company = st.sidebar.selectbox("🏢 Entreprise", companies)
 
+# FILTRE LOCALISATION
 locations = ["Toutes"] + sorted(jobs_df["location"].dropna().unique().tolist())
 selected_location = st.sidebar.selectbox("📍 Localisation", locations)
 
+# FILTRE PAYS
 countries = ["Toutes"] + sorted(jobs_df["country"].dropna().unique().tolist())
 selected_country = st.sidebar.selectbox("🌍 Pays", countries)
 
+# FILTRE CATÉGORIE
 categories = ["Toutes"] + sorted(skills_df["category"].unique().tolist())
 selected_category = st.sidebar.selectbox("📂 Catégorie", categories)
 
+# FILTRE COMPLIANCE
 compliance_options = ["Toutes", "Uniquement avec certification", "Uniquement générales"]
 selected_compliance = st.sidebar.selectbox("🔒 Type de compétence", compliance_options)
 
@@ -413,7 +410,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
     <div style="background: #12181D; border: 1px solid #2A343C; padding: 0.8rem; border-radius: 4px; text-align: center;">
         <p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: #8B93A0;">
-            📊 <b style="color: #EDEAE2;">{len(jobs_df)}</b> offres totales
+            📊 <b style="color: #EDEAE2;">{len(jobs_df)}</b> offres collectées
         </p>
     </div>
 """, unsafe_allow_html=True)
@@ -478,14 +475,14 @@ for col, (tag, icon, value, label, delta) in zip([col1, col2, col3, col4], metri
 st.markdown("---")
 
 # ============================================================
-# LAYOUT PRINCIPAL
+# SECTION 1 : CLASSEMENT DES COMPÉTENCES
 # ============================================================
+st.markdown("### 🏆 Classement des compétences")
+st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Top 15 compétences les plus demandées dans les offres</p>', unsafe_allow_html=True)
+
 col_left, col_right = st.columns([2, 1])
 
 with col_left:
-    st.markdown('<p class="section-marker">// CLASSEMENT</p>', unsafe_allow_html=True)
-    st.markdown("### 🏆 Top 15 compétences demandées")
-
     top_skills = (
         filtered_skills.groupby("skill_name")
         .size()
@@ -516,38 +513,37 @@ with col_left:
         st.plotly_chart(fig, use_container_width=True)
 
 with col_right:
-    st.markdown('<p class="section-marker">// ANALYSE</p>', unsafe_allow_html=True)
     st.markdown("### 📊 Vue d'ensemble")
+    st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Indicateurs clés sur les données filtrées</p>', unsafe_allow_html=True)
     
-    # Statistiques rapides dans la colonne droite
     st.markdown(f"""
-    <div style="background: #1C242B; border: 1px solid #2A343C; padding: 1rem 1.2rem; border-radius: 4px; margin-bottom: 1rem;">
+    <div style="background: #1C242B; border: 1px solid #2A343C; padding: 1rem 1.2rem; border-radius: 4px; margin-bottom: 0.8rem;">
         <p style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: #5C8B7C; margin: 0;">ENTREPRISES</p>
-        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0;">{filtered_jobs['company'].nunique()}</p>
+        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0; color: #EDEAE2;">{filtered_jobs['company'].nunique()}</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown(f"""
-    <div style="background: #1C242B; border: 1px solid #2A343C; padding: 1rem 1.2rem; border-radius: 4px; margin-bottom: 1rem;">
+    <div style="background: #1C242B; border: 1px solid #2A343C; padding: 1rem 1.2rem; border-radius: 4px; margin-bottom: 0.8rem;">
         <p style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: #5C8B7C; margin: 0;">PAYS</p>
-        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0;">{filtered_jobs['country'].nunique()}</p>
+        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0; color: #EDEAE2;">{filtered_jobs['country'].nunique()}</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown(f"""
     <div style="background: #1C242B; border: 1px solid #2A343C; padding: 1rem 1.2rem; border-radius: 4px;">
         <p style="font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: #5C8B7C; margin: 0;">COMPÉTENCES TOTALES</p>
-        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0;">{len(filtered_skills)}</p>
+        <p style="font-size: 1.2rem; font-weight: 600; margin: 0.2rem 0 0 0; color: #EDEAE2;">{len(filtered_skills)}</p>
     </div>
     """, unsafe_allow_html=True)
 
 st.markdown("---")
 
 # ============================================================
-# VUE PAR CATÉGORIE
+# SECTION 2 : COMPÉTENCES PAR CATÉGORIE
 # ============================================================
-st.markdown('<p class="section-marker">// RÉPARTITION PAR STRATE</p>', unsafe_allow_html=True)
 st.markdown("### 📋 Top compétences par catégorie")
+st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Les 5 compétences les plus demandées dans chaque catégorie</p>', unsafe_allow_html=True)
 
 categories_list = ['Operational & Technical', 'Health, Safety & Risk Management', 'Digital & Automation', 'Soft & Leadership']
 cols = st.columns(4)
@@ -567,10 +563,10 @@ for i, cat in enumerate(categories_list):
 st.markdown("---")
 
 # ============================================================
-# MATRICE
+# SECTION 3 : MATRICE ENTREPRISE VS CATÉGORIE
 # ============================================================
-st.markdown('<p class="section-marker">// CROISEMENT</p>', unsafe_allow_html=True)
 st.markdown("### 🏢 Matrice Entreprise vs Catégorie")
+st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Nombre de compétences par entreprise et catégorie</p>', unsafe_allow_html=True)
 
 matrix = pd.crosstab(filtered_skills['company'], filtered_skills['category'])
 
@@ -622,13 +618,13 @@ else:
 st.markdown("---")
 
 # ============================================================
-# ÉVOLUTION + RÉPARTITION
+# SECTION 4 : ÉVOLUTION + RÉPARTITION
 # ============================================================
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown('<p class="section-marker">// CHRONOLOGIE</p>', unsafe_allow_html=True)
     st.markdown("### 📈 Évolution des offres")
+    st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Nombre d\'offres collectées dans le temps</p>', unsafe_allow_html=True)
 
     if 'date_scraped' in filtered_jobs.columns and not filtered_jobs['date_scraped'].isna().all():
         filtered_jobs['date_scraped'] = pd.to_datetime(filtered_jobs['date_scraped'])
@@ -659,8 +655,8 @@ with col1:
         st.caption("_Aucune donnée temporelle_")
 
 with col2:
-    st.markdown('<p class="section-marker">// PROPORTIONS</p>', unsafe_allow_html=True)
     st.markdown("### 📊 Répartition par catégorie")
+    st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Proportion des compétences par catégorie</p>', unsafe_allow_html=True)
 
     category_counts = filtered_skills.groupby("category").size().reset_index(name="nb")
 
@@ -688,10 +684,10 @@ with col2:
 st.markdown("---")
 
 # ============================================================
-# LISTE DES OFFRES + EXPORT
+# SECTION 5 : LISTE DES OFFRES + EXPORT
 # ============================================================
-st.markdown('<p class="section-marker">// JOURNAL</p>', unsafe_allow_html=True)
-st.markdown("### 📋 Offres analysées")
+st.markdown("### 📋 Liste des offres analysées")
+st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Offres d\'emploi correspondant aux filtres sélectionnés</p>', unsafe_allow_html=True)
 
 jobs_with_skills = filtered_jobs.copy()
 jobs_with_skills['nb_skills'] = jobs_with_skills['id'].map(
@@ -737,7 +733,8 @@ st.dataframe(
 # ============================================================
 st.markdown(f"""
     <div class="footer">
-        ⛏️ MINING SKILLS INTELLIGENCE — {len(jobs_df)} OFFRES ANALYSÉES — 
+        ⛏️ MINING SKILLS INTELLIGENCE — {len(jobs_df)} OFFRES COLLECTÉES — 
+        {len(filtered_jobs)} OFFRES ANALYSÉES — 
         MISE À JOUR: {datetime.now().strftime('%d/%m/%Y %H:%M')}
     </div>
 """, unsafe_allow_html=True)
