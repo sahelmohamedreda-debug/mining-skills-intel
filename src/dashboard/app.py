@@ -233,25 +233,25 @@ def extract_country(location):
     return location.strip()
 
 # ============================================================
-# CONNEXION À LA BASE
+# CONNEXION À LA BASE — CORRIGÉ (TOUTES LES OFFRES)
 # ============================================================
 @st.cache_data(ttl=3600)
 def load_data():
     conn = sqlite3.connect(DB_PATH)
 
+    # ✅ Suppression du filtre WHERE status = 'open' pour afficher TOUTES les offres
     jobs = pd.read_sql("""
         SELECT id, company, title, location, status, source, date_scraped
         FROM jobs
-        WHERE status = 'open'
     """, conn)
 
+    # ✅ Suppression du filtre WHERE status = 'open' pour les compétences
     skills = pd.read_sql("""
         SELECT js.job_id, s.skill_name, s.category, s.compliance_relevant,
-               j.company, j.location, j.title
+               j.company, j.location, j.title, j.status
         FROM job_skills js
         JOIN skills s ON js.skill_id = s.id
         JOIN jobs j ON js.job_id = j.id
-        WHERE j.status = 'open'
     """, conn)
 
     conn.close()
