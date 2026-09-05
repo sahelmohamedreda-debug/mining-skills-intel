@@ -1,0 +1,44 @@
+{
+  "sources": [
+    {
+      "id": "koboldmetals",
+      "name": "KoBold Metals",
+      "platform": "greenhouse",
+      "slug": "koboldmetals",
+      "sector": "Exploration minière (IA)",
+      "enabled": true
+    },
+    {
+      "id": "redwoodmaterials",
+      "name": "Redwood Materials",
+      "platform": "greenhouse",
+      "slug": "redwoodmaterials",
+      "sector": "Recyclage de batteries",
+      "enabled": true
+    },
+    {
+      "id": "americanbattery",
+      "name": "American Battery Technology Company",
+      "platform": "workable",
+      "slug": "americanbatterytechnologycompany",
+      "sector": "Technologie de batteries",
+      "enabled": true
+    },
+    {
+      "id": "marianaminerals",
+      "name": "Mariana Minerals",
+      "platform": "ashby",
+      "slug": "marianaminerals",
+      "sector": "Exploration minière",
+      "enabled": true
+    },
+    {
+      "id": "lilacsolutions",
+      "name": "Lilac Solutions",
+      "platform": "rippling",
+      "slug": "lilac-solutions",
+      "sector": "Extraction de lithium",
+      "enabled": true
+    }
+  ]
+}
