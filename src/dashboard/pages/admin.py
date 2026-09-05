@@ -8,11 +8,16 @@ lu par src/collectors/config.py au prochain lancement du pipeline.
 """
 
 import json
+import re
+import sys
 from pathlib import Path
 from datetime import datetime
 
 import streamlit as st
 import pandas as pd
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from collectors.detect_source import find_candidates, validate_candidate
 
 st.set_page_config(page_title="Admin — Entreprises", page_icon="🛠️", layout="wide")
 
@@ -104,6 +109,85 @@ for col, default in [("id", ""), ("name", ""), ("platform", PLATFORMS[0]),
 
 df = df[["enabled", "name", "platform", "slug", "sector", "id"]]
 
+st.markdown("### 🔎 Ajouter automatiquement depuis une URL")
+st.caption(
+    "Cherche un lien vers une plateforme ATS connue (Greenhouse, Workable, Ashby, Rippling) "
+    "dans le HTML de la page fournie, puis vérifie que les offres sont bien accessibles. "
+    "⚠️ Ne fonctionne pas si la page carrière charge son contenu en JavaScript — dans ce "
+    "cas, ajoute l'entreprise manuellement dans le tableau ci-dessous."
+)
+
+col_url, col_name, col_btn = st.columns([3, 2, 1])
+with col_url:
+    detect_url = st.text_input("URL du site ou de la page carrière", placeholder="https://www.exemple.com/careers")
+with col_name:
+    detect_company_name = st.text_input("Nom à afficher", placeholder="Nom de l'entreprise")
+with col_btn:
+    st.markdown("&nbsp;")
+    run_detection = st.button("🔍 Détecter", use_container_width=True)
+
+if run_detection:
+    if not detect_url.strip():
+        st.warning("Renseigne une URL d'abord.")
+    else:
+        with st.spinner("Recherche et validation en cours..."):
+            try:
+                candidates = find_candidates(detect_url.strip())
+                result = None
+                for platform, slug in candidates:
+                    ok, message = validate_candidate(platform, slug)
+                    if ok:
+                        result = {"platform": platform, "slug": slug, "message": message}
+                        break
+            except RuntimeError as e:
+                st.error(f"❌ {e}")
+                result = None
+                candidates = []
+
+        if result:
+            st.success(f"✅ Détecté : **{result['platform']}** / slug `{result['slug']}` — {result['message']}")
+            st.session_state["detected_source"] = {
+                "platform": result["platform"],
+                "slug": result["slug"],
+                "name": detect_company_name.strip() or result["slug"],
+            }
+        elif candidates:
+            st.warning(
+                f"Des liens ont été trouvés ({candidates}) mais aucun n'a pu être validé "
+                "via l'API réelle — le slug est peut-être incorrect ou le board est privé."
+            )
+        else:
+            st.info(
+                "Aucune plateforme supportée détectée dans le HTML de cette page. "
+                "Le lien est peut-être chargé en JavaScript — ajoute l'entreprise manuellement."
+            )
+
+if "detected_source" in st.session_state:
+    d = st.session_state["detected_source"]
+    st.markdown(f"**Prêt à ajouter :** {d['name']} — {d['platform']} / `{d['slug']}`")
+    col_add, col_cancel = st.columns([1, 1])
+    with col_add:
+        if st.button("➕ Ajouter cette entreprise", type="primary"):
+            sources = load_sources()
+            new_id = re.sub(r"[^a-z0-9]", "", d["name"].lower()) or d["slug"]
+            sources.append({
+                "id": new_id,
+                "name": d["name"],
+                "platform": d["platform"],
+                "slug": d["slug"],
+                "sector": "",
+                "enabled": True,
+            })
+            save_sources(sources)
+            del st.session_state["detected_source"]
+            st.success(f"✅ {d['name']} ajoutée à config/sources.json.")
+            st.rerun()
+    with col_cancel:
+        if st.button("Annuler"):
+            del st.session_state["detected_source"]
+            st.rerun()
+
+st.markdown("---")
 st.markdown("### Liste des entreprises")
 
 edited_df = st.data_editor(
