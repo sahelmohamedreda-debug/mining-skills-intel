@@ -1,44 +1,52 @@
 {
   "sources": [
     {
-      "id": "koboldmetals",
+      "enabled": true,
       "name": "KoBold Metals",
       "platform": "greenhouse",
       "slug": "koboldmetals",
       "sector": "Exploration minière (IA)",
-      "enabled": true
+      "id": "koboldmetals"
     },
     {
-      "id": "redwoodmaterials",
+      "enabled": true,
       "name": "Redwood Materials",
       "platform": "greenhouse",
       "slug": "redwoodmaterials",
       "sector": "Recyclage de batteries",
-      "enabled": true
+      "id": "redwoodmaterials"
     },
     {
-      "id": "americanbattery",
+      "enabled": true,
       "name": "American Battery Technology Company",
       "platform": "workable",
       "slug": "americanbatterytechnologycompany",
       "sector": "Technologie de batteries",
-      "enabled": true
+      "id": "americanbattery"
     },
     {
-      "id": "marianaminerals",
+      "enabled": true,
       "name": "Mariana Minerals",
       "platform": "ashby",
       "slug": "marianaminerals",
       "sector": "Exploration minière",
-      "enabled": true
+      "id": "marianaminerals"
     },
     {
-      "id": "lilacsolutions",
+      "enabled": true,
       "name": "Lilac Solutions",
       "platform": "rippling",
       "slug": "lilac-solutions",
       "sector": "Extraction de lithium",
-      "enabled": true
+      "id": "lilacsolutions"
+    },
+    {
+      "enabled": true,
+      "name": "blue moon metals",
+      "platform": "greenhouse",
+      "slug": "bluemoonmetals",
+      "sector": "Exploration minière (métaux polymétalliques)",
+      "id": "bluemoonmetals"
     }
   ]
 }
