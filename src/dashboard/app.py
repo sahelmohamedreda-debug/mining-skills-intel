@@ -2,11 +2,13 @@
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import sqlite3
 from pathlib import Path
 import plotly.express as px
 from datetime import datetime
 import os
+import sys
 
 # ============================================================
 # CONFIGURATION DE LA PAGE
@@ -19,6 +21,9 @@ st.set_page_config(
 )
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "jobs.db"
+
+sys.path.append(str(Path(__file__).parent.parent))
+from analysis.roles import normalize_role
 
 # ============================================================
 # STYLE — VERSION SOMBRE (MINERAL)
@@ -233,6 +238,68 @@ def extract_country(location):
     return location.strip()
 
 # ============================================================
+# SCORE TF-IDF DES COMPÉTENCES
+# ============================================================
+def compute_tfidf_scores(skills_data: pd.DataFrame, total_jobs: int) -> pd.DataFrame:
+    """
+    Calcule un score TF-IDF par compétence, pour compléter le classement par
+    fréquence brute.
+
+    Ici, chaque ligne de `job_skills` = une compétence mentionnée dans une offre
+    (présence, pas de comptage multiple dans la même offre). Donc :
+      - df (document frequency) = nombre d'offres contenant la compétence
+                                 = exactement le "nb d'occurrences" déjà affiché
+      - idf = log(N / df)  → proche de 0 si la compétence est quasi universelle
+                             (ex: Project Management), élevé si elle est rare
+      - score = df * idf  → favorise les compétences réellement discriminantes,
+                             pas juste les plus fréquentes ni les plus rares
+
+    Les compétences présentes dans TOUTES les offres filtrées (df == N) obtiennent
+    un idf de 0 et sont donc naturellement exclues du haut du classement.
+    """
+    if total_jobs == 0 or skills_data.empty:
+        return pd.DataFrame(columns=["skill_name", "df", "idf", "tfidf_score"])
+
+    counts = (
+        skills_data.groupby("skill_name")["job_id"]
+        .nunique()
+        .reset_index(name="df")
+    )
+    counts["idf"] = np.log(total_jobs / counts["df"])
+    counts["tfidf_score"] = counts["df"] * counts["idf"]
+    return counts.sort_values("tfidf_score", ascending=False)
+
+
+def compute_role_tfidf_scores(role_skills_data: pd.DataFrame, all_skills_data: pd.DataFrame, total_jobs: int) -> pd.DataFrame:
+    """
+    Score TF-IDF pour classer les compétences À L'INTÉRIEUR D'UN RÔLE DONNÉ.
+
+    Différence avec compute_tfidf_scores() : ici on distingue explicitement
+      - TF = fréquence de la compétence DANS LES OFFRES DE CE RÔLE seulement
+      - IDF = calculé sur TOUT le jeu de données filtré (tous rôles confondus)
+
+    Une compétence quasi universelle sur l'ensemble des offres (Communication,
+    Collaboration...) aura un idf proche de 0 et sera donc reléguée, même si
+    elle est très fréquente dans ce rôle précis — l'objectif est de faire
+    ressortir ce qui est spécifique à CE rôle, pas juste ce qui y est fréquent.
+    """
+    if total_jobs == 0 or role_skills_data.empty:
+        return pd.DataFrame(columns=["skill_name", "tf", "idf", "tfidf_score"])
+
+    global_df = (
+        all_skills_data.groupby("skill_name")["job_id"]
+        .nunique()
+        .reset_index(name="df")
+    )
+    global_df["idf"] = np.log(total_jobs / global_df["df"])
+    idf_lookup = global_df.set_index("skill_name")["idf"]
+
+    tf = role_skills_data.groupby("skill_name").size().reset_index(name="tf")
+    tf["idf"] = tf["skill_name"].map(idf_lookup).fillna(0)
+    tf["tfidf_score"] = tf["tf"] * tf["idf"]
+    return tf.sort_values("tfidf_score", ascending=False)
+
+# ============================================================
 # CONNEXION À LA BASE — CORRIGÉ (TOUTES LES OFFRES)
 # ============================================================
 @st.cache_data(ttl=3600)
@@ -259,7 +326,12 @@ def load_data():
     # Ajouter la colonne country
     jobs['country'] = jobs['location'].apply(extract_country)
     skills['country'] = skills['location'].apply(extract_country)
-    
+
+    # Ajouter la colonne role (normalisation de l'intitulé de poste)
+    jobs['role'] = jobs['title'].apply(normalize_role)
+    title_to_role = jobs.set_index('id')['role']
+    skills['role'] = skills['job_id'].map(title_to_role)
+
     return jobs, skills
 
 jobs_df, skills_df = load_data()
@@ -483,20 +555,40 @@ st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; 
 col_left, col_right = st.columns([2, 1])
 
 with col_left:
-    top_skills = (
-        filtered_skills.groupby("skill_name")
-        .size()
-        .reset_index(name="nb")
-        .sort_values("nb", ascending=False)
-        .head(15)
+    ranking_metric = st.radio(
+        "Méthode de classement",
+        ["Fréquence brute", "Score TF-IDF (compétences distinctives)"],
+        horizontal=True,
+        help=(
+            "La fréquence brute favorise les compétences génériques très demandées "
+            "(ex: Project Management, Collaboration, Communication). Le score TF-IDF "
+            "réduit le poids des compétences quasi universelles pour faire ressortir "
+            "des compétences plus spécifiques au secteur minier."
+        )
     )
+
+    n_jobs_ref = filtered_jobs["id"].nunique()
+
+    if ranking_metric == "Fréquence brute":
+        top_skills = (
+            filtered_skills.groupby("skill_name")
+            .size()
+            .reset_index(name="nb")
+            .sort_values("nb", ascending=False)
+            .head(15)
+        )
+        x_label = "Occurrences"
+    else:
+        tfidf_scores = compute_tfidf_scores(filtered_skills, n_jobs_ref)
+        top_skills = tfidf_scores.rename(columns={"tfidf_score": "nb"}).head(15)
+        x_label = "Score TF-IDF"
 
     if len(top_skills) > 0:
         fig = px.bar(
             top_skills.sort_values("nb"),
             x="nb", y="skill_name",
             orientation="h",
-            labels={"nb": "Occurrences", "skill_name": "Compétence"},
+            labels={"nb": x_label, "skill_name": "Compétence"},
             color="nb",
             color_continuous_scale=["#2A343C", "#5C8B7C"],
             title=""
@@ -614,6 +706,80 @@ if not matrix.empty:
         st.caption(f"📂 **{top_cat.index[0]}** : {top_cat.iloc[0]} compétences")
 else:
     st.caption("_Aucune donnée_")
+
+st.markdown("---")
+
+# ============================================================
+# SECTION 3bis : COMPÉTENCES PAR RÔLE
+# ============================================================
+st.markdown("### 🎯 Compétences par rôle")
+st.markdown('<p style="color: #8B93A0; font-size: 0.85rem; margin-top: -0.3rem; margin-bottom: 1rem;">Les intitulés de poste sont regroupés en rôles normalisés (ex: toutes les variantes d\'"Electrical Engineer" comptent ensemble), pour voir quelles compétences reviennent le plus pour un rôle donné.</p>', unsafe_allow_html=True)
+
+role_job_counts = filtered_jobs['role'].value_counts()
+# On ne propose que les rôles avec au moins 3 offres dans la sélection actuelle,
+# pour éviter des classements basés sur 1 ou 2 offres seulement.
+available_roles = role_job_counts[role_job_counts >= 3].index.tolist()
+
+if len(available_roles) == 0:
+    st.caption("_Pas assez d'offres par rôle dans cette sélection (essaie de retirer un filtre)._")
+else:
+    selected_role = st.selectbox(
+        "Choisir un rôle",
+        available_roles,
+        format_func=lambda r: f"{r} ({role_job_counts[r]} offres)"
+    )
+
+    role_skills = filtered_skills[filtered_skills["role"] == selected_role]
+
+    role_ranking_metric = st.radio(
+        "Méthode de classement",
+        ["Fréquence brute", "Score TF-IDF (spécifique à ce rôle)"],
+        horizontal=True,
+        key="role_ranking_metric",
+        help=(
+            "La fréquence brute montre les compétences les plus citées dans ce rôle, "
+            "même si elles sont aussi citées partout ailleurs (Communication, Collaboration...). "
+            "Le score TF-IDF les relègue pour faire ressortir ce qui distingue vraiment ce rôle "
+            "des autres."
+        )
+    )
+
+    if role_ranking_metric == "Fréquence brute":
+        top_role_skills = (
+            role_skills.groupby("skill_name")
+            .size()
+            .reset_index(name="nb")
+            .sort_values("nb", ascending=False)
+            .head(10)
+        )
+        role_x_label = "Occurrences"
+    else:
+        role_tfidf = compute_role_tfidf_scores(role_skills, filtered_skills, n_jobs_ref)
+        top_role_skills = role_tfidf.rename(columns={"tfidf_score": "nb"}).head(10)
+        role_x_label = "Score TF-IDF"
+
+    if len(top_role_skills) > 0:
+        fig_role = px.bar(
+            top_role_skills.sort_values("nb"),
+            x="nb", y="skill_name",
+            orientation="h",
+            labels={"nb": role_x_label, "skill_name": "Compétence"},
+            color="nb",
+            color_continuous_scale=["#2A343C", "#D4A24C"],
+        )
+        fig_role.update_layout(
+            yaxis={'categoryorder': 'total ascending'},
+            height=380,
+            margin=dict(l=0, r=0, t=10, b=0),
+            showlegend=False,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#EDEAE2', family='Inter')
+        )
+        st.plotly_chart(fig_role, use_container_width=True)
+        st.caption(f"Basé sur {role_job_counts[selected_role]} offres classées « {selected_role} ».")
+    else:
+        st.caption("_Aucune compétence extraite pour ce rôle dans cette sélection._")
 
 st.markdown("---")
 
