@@ -2,8 +2,8 @@ name: Daily Mining Skills Pipeline
 
 on:
   schedule:
-    # Tous les jours à 6h00 UTC (7h/8h heure du Maroc selon saison)
-    - cron: '0 */4 * * *'
+    # Tous les jours à 8h00 heure du Maroc (7h00 UTC)
+    - cron: '0 7 * * *'
   workflow_dispatch:  # Permet de le lancer manuellement depuis GitHub
 
 jobs:
@@ -12,28 +12,35 @@ jobs:
     steps:
       - name: Checkout du repo
         uses: actions/checkout@v4
+        
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          
       - name: Installer les dépendances
         run: pip install -r requirements.txt
+        
       - name: Initialiser la base de données
         run: python src/db/init_extraction_tables.py
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          
       - name: Collecter les nouvelles offres
         run: python src/collectors/run_all.py
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          
       - name: Marquer les offres fermées
         run: python src/collectors/mark_closed_jobs.py
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          
       - name: Extraire les compétences (1 batch)
         run: python src/extraction/extract_batch.py
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          
       - name: Commit et push la base mise à jour
         run: |
           git config --global user.name "GitHub Actions Bot"
