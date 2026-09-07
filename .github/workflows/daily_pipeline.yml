@@ -24,22 +24,22 @@ jobs:
       - name: Initialiser la base de données
         run: python src/db/init_extraction_tables.py
         env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           
       - name: Collecter les nouvelles offres
         run: python src/collectors/run_all.py
         env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           
       - name: Marquer les offres fermées
         run: python src/collectors/mark_closed_jobs.py
         env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
           
       - name: Extraire les compétences (1 batch)
         run: python src/extraction/extract_batch.py
         env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.DEEPINFRA_API_KEY}}
           
       - name: Commit et push la base mise à jour
         run: |
